@@ -119,3 +119,82 @@ exports.boardModify = async function (req, res) {
         })
     }
 }
+
+
+// 09. 댓글 작성
+exports.commentPost = async function (req, res) {
+    const token = req.verifiedToken;
+    const json = req.body
+    const boardId = req.params.boardId
+
+    const connection = await pool.getConnection(async (conn) => conn)
+    try {
+        const insertCommentQuery = `INSERT INTO comment (content, userId, boardIdx) 
+        VALUES(?, ?, ?);
+        `
+        console.log(token.id)
+        const selectUserInfoParams = token.id
+        const [rows] = await connection.query(insertCommentQuery, [json.contents, selectUserInfoParams, boardId])
+        connection.release()
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            result: rows,
+            message: '답글쓰기 성공',
+        })
+    } catch (err) {
+        logger.error(`example non transaction Query error\n: ${JSON.stringify(err)}`)
+        connection.release()
+        return res.json({
+            isSuccess: false,
+            code: 318,
+            message: '답글쓰기 실패',
+        })
+    }
+}
+
+
+// 10. 댓글 수정
+exports.commentModify = async function (req, res) {
+    const token = req.verifiedToken
+    const json = req.body
+    const boardId = req.params.boardId
+    const commentId = req.params.commentId
+
+    const connection = await pool.getConnection(async (conn) => conn)
+    try {
+        const modifyCommentQuery = `SELECT userId FROM comment WHERE idcomment=?;`
+        console.log(token.id)
+        const selectUserInfoParams = token.id
+        console.log("commentId : " + commentId)
+        const [rows] = await connection.query(modifyCommentQuery, commentId)
+        connection.release()
+        console.log(rows[0])
+        if (rows[0].userId != token.id) {
+            return res.json({
+                isSuccess: false,
+                code: 319,
+                message: '로그인 정보가 다릅니다'
+            })
+        }
+
+        const patchCommentQuery = `UPDATE comment SET content=? WHERE idcomment=?;`
+        const [result] = await connection.query(patchCommentQuery, [json.contents, commentId])
+
+        console.log(result)
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            result: result,
+            message: '댓글 수정 성공',
+        })
+    } catch (err) {
+        logger.error(`example non transaction Query error\n: ${JSON.stringify(err)}`)
+        connection.release()
+        return res.json({
+            isSuccess: false,
+            code: 320,
+            message: '댓글 수정 실패',
+        })
+    }
+}

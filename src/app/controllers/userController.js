@@ -345,34 +345,34 @@ exports.userInfo = async function (req, res) {
 // 05.modifyUser 내 정보수정
 
 exports.modifyUser = async function (req, res) {
-    const token = req.verifiedToken;
-    console.log(token);
+    const token = req.verifiedToken
+    const data = req.body
+    console.log(token)
     try {
         const connection = await pool.getConnection(async (conn) => conn)
         try {
-            const selectUserInfoQuery = `
-                    SELECT id, name
-                    FROM user
-                    WHERE id = ?;
-                    `
+            const selectUserInfoQuery = `UPDATE user 
+            SET pwd=?, name=? 
+            WHERE id=?;
+            `
             console.log(token.id)
             const selectUserInfoParams = token.id
-            const [userInfoRows] = await connection.query(selectUserInfoQuery, selectUserInfoParams)
+            const [userInfoRows] = await connection.query(selectUserInfoQuery, [data.password, data.name, selectUserInfoParams])
             connection.release()
             res.json({
                 userInfo: userInfoRows,
                 isSuccess: true,
                 code: 200,
-                message: '정보조회 성공',
+                message: '정보수정 성공',
             })
         } catch (err) {
-            logger.error(`App - userInfo Query error\n: ${JSON.stringify(err)}`)
+            logger.error(`App - modifyUser Query error\n: ${JSON.stringify(err)}`)
             console.log(err);
             connection.release()
             return false
         }
     } catch (err) {
-        logger.error(`App - userInfo DB Connection error\n: ${JSON.stringify(err)}`)
+        logger.error(`App - modifyUser DB Connection error\n: ${JSON.stringify(err)}`)
         return false
     }
 }

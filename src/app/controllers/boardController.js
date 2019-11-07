@@ -11,13 +11,20 @@ const idReg = /^[A-za-z]/g
 const crypto = require('crypto')
 const secret_config = require('../../../config/secret')
 
-// 06. 게시글 리스트, 최신글 순서대로
+// 게시글 리스트, 최신글 순서대로
 
 exports.boardList = async function (req, res) {
 
     const connection = await pool.getConnection(async (conn) => conn)
     try {
-        const insertBoardQuery = `SELECT b.title, b.contents, u.id, b.img 
+        const insertBoardQuery = `SELECT b.title, b.contents, u.id, b.img,
+        CASE
+        WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+        then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+        WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+        then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+        else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
+        END AS createdAt
         FROM board AS b JOIN user AS u ON u.id = b.userId 
         ORDER BY b.createAt DESC limit 0,5;`
 
@@ -40,23 +47,42 @@ exports.boardList = async function (req, res) {
     }
 }
 
+// 새로고침 
+exports.boardRefresh = async function (req, res) {
+
+    return res.redirect('/board');
+}
 
 
-
-// 07. 게시글 작성
+//  게시글 작성
 exports.boardPost = async function (req, res) {
     console.log("board Test")
     const token = req.verifiedToken;
     const json = req.body
+    // console.log("type test " + json.categorytype)
 
     const connection = await pool.getConnection(async (conn) => conn)
     try {
-        const insertBoardQuery = `INSERT INTO board (title, contents, userId, img) 
-        VALUES(?, ?, ?, ?);
-        `
+        const insertBoardQuery = `INSERT INTO board (title, contents, userId, img, categorytype)
+        VALUES(?, ?, ?, ?, ?);`
         console.log(token.id)
         const selectUserInfoParams = token.id
-        const [rows] = await connection.query(insertBoardQuery, [json.title, json.contents, selectUserInfoParams, json.img])
+        const [rows] = await connection.query(insertBoardQuery, [json.title, json.contents, selectUserInfoParams, json.img, json.categorytype])
+        console.log(rows)
+
+        // const subscribeUserQuery = `SELECT user_id FROM popular WHERE type=?;`
+        // const [subscribeUser] = await connection.query(subscribeUser, [json.categorytype])
+
+
+
+        // // ======== push 기능
+        // var message = {
+        //     "to": subscribeUser.user_id
+        // }
+
+
+
+
         connection.release()
         return res.json({
             isSuccess: true,
@@ -75,7 +101,7 @@ exports.boardPost = async function (req, res) {
     }
 }
 
-// 08. 게시글 수정
+//  게시글 수정
 exports.boardModify = async function (req, res) {
     const token = req.verifiedToken
     const json = req.body
@@ -121,7 +147,7 @@ exports.boardModify = async function (req, res) {
 }
 
 
-// 09. 댓글 작성
+//  댓글 작성
 exports.commentPost = async function (req, res) {
     const token = req.verifiedToken;
     const json = req.body
@@ -154,7 +180,7 @@ exports.commentPost = async function (req, res) {
 }
 
 
-// 10. 댓글 수정
+// 댓글 수정
 exports.commentModify = async function (req, res) {
     const token = req.verifiedToken
     const json = req.body
@@ -195,6 +221,48 @@ exports.commentModify = async function (req, res) {
             isSuccess: false,
             code: 320,
             message: '댓글 수정 실패',
+        })
+    }
+}
+
+
+// 글 상세보기
+exports.boardDetail = async function (req, res) {
+
+
+    connection = await pool.getConnection(async (conn) => conn)
+    try {
+
+        const viewCountQuery = `UPDATE board SET views = views+1 WHERE idboard=?;`
+        const view = await connection.query(viewCountQuery, [req.params.boardId])
+
+        const BoardViewQuery = `SELECT b.title, b.contents, b.userId, b.img, c.content,
+        CASE
+        WHEN TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP) < 60
+        then CONCAT(TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP), ' 분전')
+        WHEN TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP) < 24
+        then CONCAT(TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+        else CONCAT(TIMESTAMPDIFF(DAY, c.createAt, CURRENT_TIMESTAMP), ' 일 전')
+        END AS createdAt
+        FROM board AS b
+        JOIN comment AS c ON b.idBoard = c.boardIdx WHERE b.idBoard=?;`
+
+        const [rows] = await connection.query(BoardViewQuery, [req.params.boardId])
+
+        connection.release()
+        return res.json({
+            isSuccess: true,
+            code: 200,
+            result: rows,
+            message: '글 상세보기 성공',
+        })
+    } catch (err) {
+        logger.error(`example non transaction Query error\n: ${JSON.stringify(err)}`)
+        connection.release()
+        return res.json({
+            isSuccess: false,
+            code: 314,
+            message: '글 상세보기 실패',
         })
     }
 }

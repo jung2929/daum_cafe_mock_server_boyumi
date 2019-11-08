@@ -47,7 +47,7 @@ exports.boardList = async function (req, res) {
     }
 }
 
-// 새로고침 
+// 게시글 리스트 새로고침 
 exports.boardRefresh = async function (req, res) {
 
     return res.redirect('/board');
@@ -265,4 +265,12 @@ exports.boardDetail = async function (req, res) {
             message: '글 상세보기 실패',
         })
     }
+}
+
+
+// 특정 게시글 새로고침
+exports.boardIdRefresh = async function (req, res) {
+
+    const id = req.params.boardId;
+    return res.redirect('/board/' + id);
 }

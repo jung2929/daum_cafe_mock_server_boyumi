@@ -24,6 +24,7 @@
     "method-override": "^3.0.0",
     "mysql2": "^2.0.0",
     "regex-email": "^1.0.2",
+    "socket.io": "^2.3.0",
     "winston": "^3.2.1",
     "winston-daily-rotate-file": "^4.2.1"
   }

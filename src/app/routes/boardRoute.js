@@ -15,6 +15,7 @@ module.exports = function (app) {
     app.route('/board/:boardId/modifyComment/:commentId').patch(jwtMiddleware, board.commentModify); // 댓글 수정
 
     app.get('/board/:boardId', board.boardDetail); // 게시글 상세보기
+    app.get('/board/:boardId/refresh', board.boardIdRefresh); // 특정 게시글 새로고침 
 
 
     app.get('/check', jwtMiddleware, user.check);

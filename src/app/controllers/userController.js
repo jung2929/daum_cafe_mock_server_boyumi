@@ -140,6 +140,7 @@ exports.signUp = async function (req, res) {
  update : 2019.11.01
  02.signIn API = 로그인
  **/
+
 exports.signIn = async function (req, res) {
 
     const token = req.headers['x-access-token']

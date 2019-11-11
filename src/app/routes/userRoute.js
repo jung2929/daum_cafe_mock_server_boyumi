@@ -7,7 +7,7 @@ module.exports = function (app) {
     app.get('/user/info', jwtMiddleware, user.userInfo); // 내 정보보기
     app.route('/user/modifyInfo').patch(jwtMiddleware, user.modifyUser); // 내 정보 수정
 
-    app.route('/user/resign').patch(jwtMiddleware, user.deleteUser); // 회원탈퇴
+    app.route('/user/resign').delete(jwtMiddleware, user.deleteUser); // 회원탈퇴
 
     app.get('/check', jwtMiddleware, user.check);
 };

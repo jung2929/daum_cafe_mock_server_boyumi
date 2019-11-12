@@ -46,10 +46,6 @@ exports.boardList = async function (req, res) {
   }
 }
 
-// 게시글 리스트 새로고침
-exports.boardRefresh = async function (req, res) {
-  return res.redirect('/board')
-}
 
 //  게시글 작성
 exports.boardPost = async function (req, res) {
@@ -70,7 +66,7 @@ exports.boardPost = async function (req, res) {
       selectUserInfoParams,
       json.img,
       json.categorytype,
-      json.cafeName
+      json.cafeName,
     ])
     console.log(rows)
 
@@ -147,7 +143,6 @@ exports.boardModify = async function (req, res) {
   }
 }
 
-
 // 게시글 삭제
 exports.deleteBoard = async function (req, res) {
   const token = req.verifiedToken
@@ -162,7 +157,10 @@ exports.deleteBoard = async function (req, res) {
           `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [boardDeleteRows] = await connection.query(selectBoardDeleteQuery, [req.params.boardId, selectBoardDeleteQuery])
+      const [boardDeleteRows] = await connection.query(selectBoardDeleteQuery, [
+        req.params.boardId,
+        selectBoardDeleteQuery,
+      ])
       connection.release()
       res.json({
         boardDeleteRows: boardDeleteRows,
@@ -172,7 +170,7 @@ exports.deleteBoard = async function (req, res) {
       })
     } catch (err) {
       logger.error(`App - boardDelete Query error\n: ${JSON.stringify(err)}`)
-      console.log(err);
+      console.log(err)
       connection.release()
       return false
     }
@@ -186,7 +184,6 @@ exports.deleteBoard = async function (req, res) {
 exports.commentPost = async function (req, res) {
   const token = req.verifiedToken
   const json = req.body
-  const boardId = req.params.boardId
 
   const connection = await pool.getConnection(async (conn) => conn)
   try {
@@ -195,7 +192,7 @@ exports.commentPost = async function (req, res) {
         `
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [rows] = await connection.query(insertCommentQuery, [json.contents, selectUserInfoParams, boardId])
+    const [rows] = await connection.query(insertCommentQuery, [json.contents, selectUserInfoParams, req.params.boardId])
     connection.release()
     return res.json({
       isSuccess: true,
@@ -300,8 +297,79 @@ exports.boardDetail = async function (req, res) {
   }
 }
 
-// 특정 게시글 새로고침
-exports.boardIdRefresh = async function (req, res) {
-  const id = req.params.boardId
-  return res.redirect('/board/' + id)
+
+
+// 내가 쓴 글 조회
+exports.myBoard = async function (req, res) {
+  const token = req.verifiedToken
+  const connection = await pool.getConnection(async (conn) => conn)
+  try {
+    const myBoardListQuery = `SELECT b.title, b.contents, u.name, b.img,
+        CASE
+        WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+        then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+        WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+        then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+        else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
+        END AS createdAt
+        FROM board AS b JOIN user AS u ON u.id = b.userId AND u.status != 'DELETED'
+        AND b.status != 'DELETED'
+        WHERE u.id=?
+        ORDER BY b.createAt DESC limit 0,5;`
+
+    const [rows] = await connection.query(myBoardListQuery, token.id)
+    connection.release()
+    return res.json({
+      isSuccess: true,
+      code: 200,
+      result: rows,
+      message: '내가 쓴 글 목록 조회 성공',
+    })
+  } catch (err) {
+    logger.error(`My board List Query error\n: ${JSON.stringify(err)}`)
+    connection.release()
+    return res.json({
+      isSuccess: false,
+      code: 314,
+      message: '내가 쓴 글 목록 조회 실패',
+    })
+  }
+}
+
+// 내가 쓴 댓글 조회
+exports.myComment = async function (req, res) {
+  const token = req.verifiedToken
+  const connection = await pool.getConnection(async (conn) => conn)
+  try {
+    const myBoardListQuery = `SELECT b.title, c.content, u.name,
+    CASE
+    WHEN TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP) < 60
+    then CONCAT(TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP), ' 분전')
+    WHEN TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP) < 24
+    then CONCAT(TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+    else CONCAT(TIMESTAMPDIFF(DAY, c.createAt, CURRENT_TIMESTAMP), ' 일 전')
+    END AS createdAt
+    FROM board AS b JOIN user AS u JOIN comment AS c
+    ON u.id = c.userId AND u.status != 'DELETED'
+    AND c.status != 'DELETED'
+    WHERE u.id=?
+    ORDER BY c.createAt DESC limit 0,5;`
+
+    const [rows] = await connection.query(myBoardListQuery, token.id)
+    connection.release()
+    return res.json({
+      isSuccess: true,
+      code: 200,
+      result: rows,
+      message: '내가 쓴 댓글 목록 조회 성공',
+    })
+  } catch (err) {
+    logger.error(`My Comment List Query error\n: ${JSON.stringify(err)}`)
+    connection.release()
+    return res.json({
+      isSuccess: false,
+      code: 314,
+      message: '내가 쓴 댓글 목록 조회 실패',
+    })
+  }
 }

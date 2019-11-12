@@ -16,7 +16,7 @@ const secret_config = require('../../../config/secret')
 exports.boardList = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const insertBoardQuery = `SELECT b.title, b.contents, u.id, b.img,
+    const ListBoardQuery = `SELECT b.title, b.contents, u.id, b.img,
         CASE
         WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
         then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
@@ -24,10 +24,11 @@ exports.boardList = async function (req, res) {
         then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
         else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
-        FROM board AS b JOIN user AS u ON u.id = b.userId AND status != 'DELETED'
+        FROM board AS b JOIN user AS u ON u.id = b.userId AND b.status != 'DELETED'
+        WHERE b.cafeName=?
         ORDER BY b.createAt DESC limit 0,5;`
 
-    const [rows] = await connection.query(insertBoardQuery)
+    const [rows] = await connection.query(ListBoardQuery, [req.params.cafeName])
     connection.release()
     return res.json({
       isSuccess: true,
@@ -257,6 +258,46 @@ exports.commentModify = async function (req, res) {
   }
 }
 
+
+// 댓글삭제
+exports.deleteComment = async function (req, res) {
+  const token = req.verifiedToken
+  const data = req.body
+  console.log(token)
+  try {
+    const connection = await pool.getConnection(async (conn) => conn)
+    try {
+      const selectCommentDeleteQuery = `UPDATE comment
+          SET status='DELETED' 
+          WHERE idcomment=? AND userId=?;
+          `
+      console.log(token.id)
+      const selectUserInfoParams = token.id
+      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [
+        req.params.boardId,
+        selectBoardDeleteQuery,
+      ])
+      connection.release()
+      res.json({
+        commentDeleteRows: commentDeleteRows,
+        isSuccess: true,
+        code: 200,
+        message: '댓글 삭제 성공',
+      })
+    } catch (err) {
+      logger.error(`App - commentDelete Query error\n: ${JSON.stringify(err)}`)
+      console.log(err)
+      connection.release()
+      return false
+    }
+  } catch (err) {
+    logger.error(`App - commentDelete DB Connection error\n: ${JSON.stringify(err)}`)
+    return false
+  }
+}
+
+
+
 // 글 상세보기
 exports.boardDetail = async function (req, res) {
   connection = await pool.getConnection(async (conn) => conn)
@@ -336,24 +377,25 @@ exports.myBoard = async function (req, res) {
   }
 }
 
-// 내가 쓴 댓글 조회
+// 내가 댓글 쓴 글
 exports.myComment = async function (req, res) {
   const token = req.verifiedToken
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const myBoardListQuery = `SELECT b.title, c.content, u.name,
+    const myBoardListQuery = `SELECT b.title, b.contents, b.idboard,
     CASE
-    WHEN TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP) < 60
-    then CONCAT(TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP), ' 분전')
-    WHEN TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP) < 24
-    then CONCAT(TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP), ' 시간 전')
-    else CONCAT(TIMESTAMPDIFF(DAY, c.createAt, CURRENT_TIMESTAMP), ' 일 전')
+    WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+    then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+    WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+    then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+    else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
     END AS createdAt
     FROM board AS b JOIN user AS u JOIN comment AS c
-    ON u.id = c.userId AND u.status != 'DELETED'
-    AND c.status != 'DELETED'
+    ON u.id = c.userId AND c.boardIdx = b.idboard
+    AND c.status != 'DELETED' AND b.status != 'DELETED'
     WHERE u.id=?
-    ORDER BY c.createAt DESC limit 0,5;`
+    GROUP BY b.idboard
+    ORDER BY b.createAt DESC limit 0,5;`
 
     const [rows] = await connection.query(myBoardListQuery, token.id)
     connection.release()

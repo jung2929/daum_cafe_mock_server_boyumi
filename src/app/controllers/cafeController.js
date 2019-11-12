@@ -20,42 +20,29 @@ exports.cafeMake = async function (req, res) {
 
     const connection = await pool.getConnection(async (conn) => conn)
     try {
-        const insertBoardQuery = `INSERT INTO board (title, contents, userId, img, categorytype, cafeName)
-          VALUES(?, ?, ?, ?, ?, ?);`
+        const insertCafeQuery = `INSERT INTO cafe (name)
+          VALUES (?);`
         console.log(token.id)
         const selectUserInfoParams = token.id
-        const [rows] = await connection.query(insertBoardQuery, [
-            json.title,
-            json.contents,
-            selectUserInfoParams,
-            json.img,
-            json.categorytype,
+        const [rows] = await connection.query(insertCafeQuery, [
             json.cafeName
         ])
         console.log(rows)
-
-        // const subscribeUserQuery = `SELECT user_id FROM popular WHERE type=?;`
-        // const [subscribeUser] = await connection.query(subscribeUser, [json.categorytype])
-
-        // // ======== push 기능
-        // var message = {
-        //     "to": subscribeUser.user_id
-        // }
 
         connection.release()
         return res.json({
             isSuccess: true,
             code: 200,
             result: rows,
-            message: '글쓰기 성공',
+            message: '카페생성 성공',
         })
     } catch (err) {
-        logger.error(`example non transaction Query error\n: ${JSON.stringify(err)}`)
+        logger.error(`Cafe Create Query error\n: ${JSON.stringify(err)}`)
         connection.release()
         return res.json({
             isSuccess: false,
             code: 315,
-            message: '글쓰기 실패',
+            message: '카페 생성 실패',
         })
     }
 }
@@ -63,48 +50,33 @@ exports.cafeMake = async function (req, res) {
 
 // 카페 리스트
 exports.cafeList = async function (req, res) {
-    const token = req.verifiedToken
-    const json = req.body
-    // console.log("type test " + json.categorytype)
 
     const connection = await pool.getConnection(async (conn) => conn)
     try {
-        const insertBoardQuery = `INSERT INTO board (title, contents, userId, img, categorytype, cafeName)
-          VALUES(?, ?, ?, ?, ?, ?);`
-        console.log(token.id)
-        const selectUserInfoParams = token.id
-        const [rows] = await connection.query(insertBoardQuery, [
-            json.title,
-            json.contents,
-            selectUserInfoParams,
-            json.img,
-            json.categorytype,
-            json.cafeName
-        ])
-        console.log(rows)
+        const CafeListdQuery = `SELECT name 
+FROM cafe;`
+        const [rows] = await connection.query(CafeListdQuery)
 
-        // const subscribeUserQuery = `SELECT user_id FROM popular WHERE type=?;`
-        // const [subscribeUser] = await connection.query(subscribeUser, [json.categorytype])
-
-        // // ======== push 기능
-        // var message = {
-        //     "to": subscribeUser.user_id
-        // }
+        const list = [];
+        for (var i = 0; i < rows.length; i++) {
+            list[i] = rows[i];
+        }
+        console.log(list)
 
         connection.release()
         return res.json({
             isSuccess: true,
             code: 200,
-            result: rows,
-            message: '글쓰기 성공',
+            result: list,
+            message: '카페목록 조회 성공',
         })
     } catch (err) {
-        logger.error(`example non transaction Query error\n: ${JSON.stringify(err)}`)
+        logger.error(`Cafe List Query error\n: ${JSON.stringify(err)}`)
         connection.release()
         return res.json({
             isSuccess: false,
-            code: 315,
-            message: '글쓰기 실패',
+            code: 314,
+            message: '카페목록 조회 실패',
         })
     }
 }

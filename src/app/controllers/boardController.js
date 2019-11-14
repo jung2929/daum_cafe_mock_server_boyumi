@@ -12,7 +12,6 @@ const crypto = require('crypto')
 const secret_config = require('../../../config/secret')
 
 // 게시글 리스트, 최신글 순서대로
-
 exports.boardList = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
@@ -24,7 +23,8 @@ exports.boardList = async function (req, res) {
         then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
         else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
-        FROM board AS b JOIN user AS u ON u.id = b.userId AND b.status != 'DELETED'
+        FROM board AS b JOIN user AS u
+        ON u.id = b.userId AND b.status != 'DELETED'
         WHERE b.cafeName=?
         ORDER BY b.createAt DESC limit 0,5;`
 
@@ -274,8 +274,7 @@ exports.deleteComment = async function (req, res) {
       console.log(token.id)
       const selectUserInfoParams = token.id
       const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [
-        req.params.boardId,
-        selectBoardDeleteQuery,
+        req.params.boardId, token.id
       ])
       connection.release()
       res.json({
@@ -314,7 +313,8 @@ exports.boardDetail = async function (req, res) {
         else CONCAT(TIMESTAMPDIFF(DAY, c.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
         FROM board AS b
-        JOIN comment AS c ON b.idBoard = c.boardIdx WHERE b.idBoard=?;`
+        JOIN comment AS c ON (c.status <> 'DELETED') AND b.idBoard = c.boardIdx
+        WHERE b.idBoard=?;`
 
     const [rows] = await connection.query(BoardViewQuery, [req.params.boardId])
 
@@ -342,7 +342,9 @@ exports.boardDetail = async function (req, res) {
 
 // 내가 쓴 글 조회
 exports.myBoard = async function (req, res) {
+  console.log(req.verifiedToken)
   const token = req.verifiedToken
+  console.log("my board list test")
   const connection = await pool.getConnection(async (conn) => conn)
   try {
     const myBoardListQuery = `SELECT b.title, b.contents, u.name, b.img,
@@ -353,12 +355,13 @@ exports.myBoard = async function (req, res) {
         then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
         else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
-        FROM board AS b JOIN user AS u ON u.id = b.userId AND u.status != 'DELETED'
-        AND b.status != 'DELETED'
+        FROM board AS b JOIN user AS u ON u.id = b.userId AND (u.status != 'DELETED'
+        AND b.status != 'DELETED')
         WHERE u.id=?
-        ORDER BY b.createAt DESC limit 0,5;`
+        ORDER BY b.createAt DESC;`
 
     const [rows] = await connection.query(myBoardListQuery, token.id)
+    console.log(rows)
     connection.release()
     return res.json({
       isSuccess: true,

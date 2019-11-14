@@ -88,12 +88,12 @@ exports.popularInsert = async function (req, res) {
 
     const connection = await pool.getConnection(async (conn) => conn)
     try {
-        const insertCommentQuery = `INSERT INTO popular (type, user_id)
-VALUES(?, ?);
+        const insertCommentQuery = `INSERT INTO popular (categorytype, cafeName, user_id)
+VALUES(?, ?, ?);
 `
         console.log(token.id)
         const selectUserInfoParams = token.id
-        const [rows] = await connection.query(insertCommentQuery, [json.type, selectUserInfoParams])
+        const [rows] = await connection.query(insertCommentQuery, [json.categorytype, json.cafeName, selectUserInfoParams])
         connection.release()
         return res.json({
             isSuccess: true,
@@ -126,7 +126,7 @@ exports.search = async function (req, res) {
             b.contents LIKE '%${json.word}%' OR
             u.name LIKE '%${json.word}%';`
         const [rows] = await connection.query(SearchQuery)
-
+        console.log(rows)
         const list = [];
         if (rows.length === 0)
             list[0] = "검색 결과가 없습니다.";
@@ -142,7 +142,7 @@ exports.search = async function (req, res) {
         return res.json({
             isSuccess: true,
             code: 200,
-            result: list,
+            result: rows,
             message: '검색 성공',
         })
     } catch (err) {

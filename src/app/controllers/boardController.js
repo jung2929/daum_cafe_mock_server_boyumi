@@ -10,12 +10,19 @@ const regexEmail = require('regex-email')
 const idReg = /^[A-za-z]/g
 const crypto = require('crypto')
 const secret_config = require('../../../config/secret')
+var admin = require('firebase-admin');
+var FCM = require('fcm-node');
+var serviceAccount = require('../../../config/serviceAccountKey.json')
+
+
+
 
 // 게시글 리스트, 최신글 순서대로
 exports.boardList = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const ListBoardQuery = `SELECT b.title, b.contents, u.id, b.img,
+    const ListBoardQuery = `SELECT b.idboard, b.title, b.categorytype, b.cafeName, b.createAt, u.id, b.img, COUNT(b.views),
+    (SELECT COUNT(content) FROM comment WHERE comment.boardIdx = b.idboard) AS commentCount,
         CASE
         WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
         then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
@@ -26,7 +33,8 @@ exports.boardList = async function (req, res) {
         FROM board AS b JOIN user AS u
         ON u.id = b.userId AND b.status != 'DELETED'
         WHERE b.cafeName=?
-        ORDER BY b.createAt DESC limit 0,5;`
+        GROUP BY b.idboard
+        ORDER BY b.createAt DESC;`
 
     const [rows] = await connection.query(ListBoardQuery, [req.params.cafeName])
     connection.release()
@@ -46,7 +54,6 @@ exports.boardList = async function (req, res) {
     })
   }
 }
-
 
 //  게시글 작성
 exports.boardPost = async function (req, res) {
@@ -71,14 +78,63 @@ exports.boardPost = async function (req, res) {
     ])
     console.log(rows)
 
-    // const subscribeUserQuery = `SELECT user_id FROM popular WHERE type=?;`
-    // const [subscribeUser] = await connection.query(subscribeUser, [json.categorytype])
+    // 즐겨찾기 한 사람 조회
+    const searchPopular = `SELECT i.phone FROM phone_info AS i JOIN popular AS p
+    ON i.userId = p.user_id WHERE p.categorytype=? AND p.cafeName=?;`
+    const [searchPopularRows] = await connection.query(searchPopular, [json.categorytype, json.cafeName])
 
-    // // ======== push 기능
-    // var message = {
-    //     "to": subscribeUser.user_id
+    console.log(searchPopularRows.length)
+    for (var j = 0; j < searchPopularRows.length; j++) {
+      var fcm_target_token = searchPopularRows[j].phone
+      console.log(fcm_target_token)
+      var fcm = new FCM(serviceAccount)
+      var push_data = {
+        to: fcm_target_token,
+        notification: {
+          title: json.title,
+          body: json.contents
+        },
+        data: {
+          num1: "hihi"
+        }
+      }
+
+      fcm.send(push_data, function (error, response) {
+        if (error) {
+          console.error('Push메시지 발송에 실패했습니다.');
+          console.error(error);
+          return;
+        }
+        console.log('Push메시지가 발송되었습니다.');
+        console.log(response);
+      });
+    }
+
+
+
+
+
+    // var fcm_target_token = "etf1c6Nn7h8:APA91bFpKdPnZ6Yiae1jsVh9y4-8C95e1-54x77cKABk0SkFYiuQFfGY9l4p8KT2DLikZLgCWjAq29DEpwH_e5e2F9NdpWp5egQOI6hEW5GUnB3m7I4afw7YSP0UmWacxIytPimDbR6c"
+    // var fcm = new FCM(serviceAccount)
+    // var push_data = {
+    //   to: fcm_target_token,
+    //   notification: {
+    //     title: "Hello Node",
+    //     body: "Node로 발송하는 Push 메시지 입니다."
+    //   },
+    //   data: {
+    //     num1: "hihi"
+    //   }
     // }
-
+    // fcm.send(push_data, function (error, response) {
+    //   if (error) {
+    //     console.error('Push메시지 발송에 실패했습니다.');
+    //     console.error(error);
+    //     return;
+    //   }
+    //   console.log('Push메시지가 발송되었습니다.');
+    //   console.log(response);
+    // });
     connection.release()
     return res.json({
       isSuccess: true,
@@ -193,7 +249,11 @@ exports.commentPost = async function (req, res) {
         `
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [rows] = await connection.query(insertCommentQuery, [json.contents, selectUserInfoParams, req.params.boardId])
+    const [rows] = await connection.query(insertCommentQuery, [
+      json.contents,
+      selectUserInfoParams,
+      req.params.boardId,
+    ])
     connection.release()
     return res.json({
       isSuccess: true,
@@ -258,7 +318,6 @@ exports.commentModify = async function (req, res) {
   }
 }
 
-
 // 댓글삭제
 exports.deleteComment = async function (req, res) {
   const token = req.verifiedToken
@@ -273,9 +332,7 @@ exports.deleteComment = async function (req, res) {
           `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [
-        req.params.boardId, token.id
-      ])
+      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [req.params.boardId, token.id])
       connection.release()
       res.json({
         commentDeleteRows: commentDeleteRows,
@@ -295,8 +352,6 @@ exports.deleteComment = async function (req, res) {
   }
 }
 
-
-
 // 글 상세보기
 exports.boardDetail = async function (req, res) {
   connection = await pool.getConnection(async (conn) => conn)
@@ -304,16 +359,16 @@ exports.boardDetail = async function (req, res) {
     const viewCountQuery = `UPDATE board SET views = views+1 WHERE idboard=?;`
     const view = await connection.query(viewCountQuery, [req.params.boardId])
 
-    const BoardViewQuery = `SELECT b.title, b.contents, b.userId, b.img, c.content,
+    const BoardViewQuery = `SELECT b.title, b.contents, b.userId, b.img, c.content, c.createAt, c.userId AS commentUser,
         CASE
-        WHEN TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP) < 60
-        then CONCAT(TIMESTAMPDIFF(MINUTE, c.createAt, CURRENT_TIMESTAMP), ' 분전')
-        WHEN TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP) < 24
-        then CONCAT(TIMESTAMPDIFF(HOUR, c.createAt, CURRENT_TIMESTAMP), ' 시간 전')
-        else CONCAT(TIMESTAMPDIFF(DAY, c.createAt, CURRENT_TIMESTAMP), ' 일 전')
+        WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+        then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+        WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+        then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+        else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
         FROM board AS b
-        JOIN comment AS c ON (c.status <> 'DELETED') AND b.idBoard = c.boardIdx
+        LEFT JOIN comment AS c ON (c.status <> 'DELETED') AND b.idBoard = c.boardIdx
         WHERE b.idBoard=?;`
 
     const [rows] = await connection.query(BoardViewQuery, [req.params.boardId])
@@ -338,27 +393,27 @@ exports.boardDetail = async function (req, res) {
   }
 }
 
-
-
 // 내가 쓴 글 조회
 exports.myBoard = async function (req, res) {
   console.log(req.verifiedToken)
   const token = req.verifiedToken
-  console.log("my board list test")
+  console.log('my board list test')
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const myBoardListQuery = `SELECT b.title, b.contents, u.name, b.img,
-        CASE
-        WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
-        then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
-        WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
-        then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
-        else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
-        END AS createdAt
-        FROM board AS b JOIN user AS u ON u.id = b.userId AND (u.status != 'DELETED'
-        AND b.status != 'DELETED')
-        WHERE u.id=?
-        ORDER BY b.createAt DESC;`
+    const myBoardListQuery = `
+          SELECT b.title, b.contents, u.name, b.img,
+            CASE
+          WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+          then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+          WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+          then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+          else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
+          END AS createdAt
+          FROM board AS b JOIN user AS u ON u.id = b.userId AND(u.status != 'DELETED'
+            AND b.status != 'DELETED')
+          WHERE u.id = ?
+            ORDER BY b.createAt DESC;
+          `
 
     const [rows] = await connection.query(myBoardListQuery, token.id)
     console.log(rows)
@@ -370,7 +425,11 @@ exports.myBoard = async function (req, res) {
       message: '내가 쓴 글 목록 조회 성공',
     })
   } catch (err) {
-    logger.error(`My board List Query error\n: ${JSON.stringify(err)}`)
+    logger.error(`
+          My board List Query error\ n: $ {
+            JSON.stringify(err)
+          }
+          `)
     connection.release()
     return res.json({
       isSuccess: false,
@@ -385,20 +444,23 @@ exports.myComment = async function (req, res) {
   const token = req.verifiedToken
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const myBoardListQuery = `SELECT b.title, b.contents, b.idboard,
-    CASE
-    WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
-    then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
-    WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
-    then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
-    else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
-    END AS createdAt
-    FROM board AS b JOIN user AS u JOIN comment AS c
-    ON u.id = c.userId AND c.boardIdx = b.idboard
-    AND c.status != 'DELETED' AND b.status != 'DELETED'
-    WHERE u.id=?
-    GROUP BY b.idboard
-    ORDER BY b.createAt DESC limit 0,5;`
+    const myBoardListQuery = `
+          SELECT b.title, b.contents, b.idboard,
+            CASE
+          WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
+          then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')
+          WHEN TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP) < 24
+          then CONCAT(TIMESTAMPDIFF(HOUR, b.createAt, CURRENT_TIMESTAMP), ' 시간 전')
+          else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
+          END AS createdAt
+          FROM board AS b JOIN user AS u JOIN comment AS c
+          ON u.id = c.userId AND c.boardIdx = b.idboard
+          AND c.status != 'DELETED'
+          AND b.status != 'DELETED'
+          WHERE u.id = ?
+            GROUP BY b.idboard
+          ORDER BY b.createAt DESC limit 0, 5;
+          `
 
     const [rows] = await connection.query(myBoardListQuery, token.id)
     connection.release()
@@ -409,7 +471,11 @@ exports.myComment = async function (req, res) {
       message: '내가 쓴 댓글 목록 조회 성공',
     })
   } catch (err) {
-    logger.error(`My Comment List Query error\n: ${JSON.stringify(err)}`)
+    logger.error(`
+          My Comment List Query error\ n: $ {
+            JSON.stringify(err)
+          }
+          `)
     connection.release()
     return res.json({
       isSuccess: false,

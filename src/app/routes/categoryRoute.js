@@ -15,6 +15,9 @@ module.exports = function (app) {
     app.get('/category', category.categoryList); // 카테고리 리스트 보기 
     app.route('/popular').post(jwtMiddleware, category.popularInsert); // 즐겨찾기
 
+    // 즐겨찾기한 게시판 목록
+    app.get('/user/popular', jwtMiddleware, category.userPopular);
+
 
     app.get('/check', jwtMiddleware, user.check);
 };

@@ -111,9 +111,6 @@ exports.boardPost = async function (req, res) {
     }
 
 
-
-
-
     // var fcm_target_token = "etf1c6Nn7h8:APA91bFpKdPnZ6Yiae1jsVh9y4-8C95e1-54x77cKABk0SkFYiuQFfGY9l4p8KT2DLikZLgCWjAq29DEpwH_e5e2F9NdpWp5egQOI6hEW5GUnB3m7I4afw7YSP0UmWacxIytPimDbR6c"
     // var fcm = new FCM(serviceAccount)
     // var push_data = {

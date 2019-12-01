@@ -10,18 +10,15 @@ const regexEmail = require('regex-email')
 const idReg = /^[A-za-z]/g
 const crypto = require('crypto')
 const secret_config = require('../../../config/secret')
-var admin = require('firebase-admin');
-var FCM = require('fcm-node');
+var admin = require('firebase-admin')
+var FCM = require('fcm-node')
 var serviceAccount = require('../../../config/serviceAccountKey.json')
-
-
-
 
 // 게시글 리스트, 최신글 순서대로
 exports.boardList = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const ListBoardQuery = `SELECT b.idboard, b.title, b.categorytype, b.cafeName, b.createAt, u.id, b.img, COUNT(b.views),
+    const ListBoardQuery = `SELECT b.idboard, b.title, b.categorytype, b.cafeName, b.createAt, u.id, b.img, b.views,
     (SELECT COUNT(content) FROM comment WHERE comment.boardIdx = b.idboard) AS commentCount,
         CASE
         WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
@@ -92,24 +89,23 @@ exports.boardPost = async function (req, res) {
         to: fcm_target_token,
         notification: {
           title: json.title,
-          body: json.contents
+          body: json.contents,
         },
         data: {
-          num1: "hihi"
-        }
+          num1: 'hihi',
+        },
       }
 
       fcm.send(push_data, function (error, response) {
         if (error) {
-          console.error('Push메시지 발송에 실패했습니다.');
-          console.error(error);
-          return;
+          console.error('Push메시지 발송에 실패했습니다.')
+          console.error(error)
+          return
         }
-        console.log('Push메시지가 발송되었습니다.');
-        console.log(response);
-      });
+        console.log('Push메시지가 발송되었습니다.')
+        console.log(response)
+      })
     }
-
 
     // var fcm_target_token = "etf1c6Nn7h8:APA91bFpKdPnZ6Yiae1jsVh9y4-8C95e1-54x77cKABk0SkFYiuQFfGY9l4p8KT2DLikZLgCWjAq29DEpwH_e5e2F9NdpWp5egQOI6hEW5GUnB3m7I4afw7YSP0UmWacxIytPimDbR6c"
     // var fcm = new FCM(serviceAccount)
@@ -324,12 +320,12 @@ exports.deleteComment = async function (req, res) {
     const connection = await pool.getConnection(async (conn) => conn)
     try {
       const selectCommentDeleteQuery = `UPDATE comment
-          SET status='DELETED' 
+          SET status='DELETED'
           WHERE idcomment=? AND userId=?;
           `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [req.params.boardId, token.id])
+      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [req.params.commentId, token.id])
       connection.release()
       res.json({
         commentDeleteRows: commentDeleteRows,
@@ -356,7 +352,7 @@ exports.boardDetail = async function (req, res) {
     const viewCountQuery = `UPDATE board SET views = views+1 WHERE idboard=?;`
     const view = await connection.query(viewCountQuery, [req.params.boardId])
 
-    const BoardViewQuery = `SELECT b.title, b.contents, b.userId, b.img, c.content, c.createAt, c.userId AS commentUser,
+    const BoardViewQuery = `SELECT b.title, b.contents, b.userId AS boardUser, b.img, c.content, c.createAt, c.userId AS commentUser, c.idcomment AS commentid,
         CASE
         WHEN TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP) < 60
         then CONCAT(TIMESTAMPDIFF(MINUTE, b.createAt, CURRENT_TIMESTAMP), ' 분전')

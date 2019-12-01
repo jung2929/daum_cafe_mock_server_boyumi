@@ -1,5 +1,9 @@
-const { pool } = require('../../../config/database')
-const { logger } = require('../../../config/winston')
+const {
+  pool
+} = require('../../../config/database')
+const {
+  logger
+} = require('../../../config/winston')
 
 const jwt = require('jsonwebtoken')
 const regexEmail = require('regex-email')
@@ -9,13 +13,13 @@ const secret_config = require('../../../config/secret')
 
 // 인기글 출력 메인화면
 
-exports.mainView = async function(req, res) {
+exports.mainView = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
-    const mainQuery = `SELECT b.idboard, b.cafeName, b.title, b.img, u.id, b.categorytype, b.cafeName, COUNT(b.views), 
+    const mainQuery = `SELECT b.idboard, b.cafeName, b.title, b.img, u.id, b.categorytype, b.cafeName, b.views 
         FROM board AS b JOIN user AS u ON u.id = b.userId 
         ORDER BY b.views DESC;`
-    const [ rows ] = await connection.query(mainQuery)
+    const [rows] = await connection.query(mainQuery)
 
     const list = []
     for (var i = 0; i < rows.length; i++) {
@@ -42,12 +46,12 @@ exports.mainView = async function(req, res) {
 }
 
 //  카테고리 목록
-exports.categoryList = async function(req, res) {
+exports.categoryList = async function (req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
     const insertBoardQuery = `SELECT categoryname 
 FROM category;`
-    const [ rows ] = await connection.query(insertBoardQuery)
+    const [rows] = await connection.query(insertBoardQuery)
 
     const list = []
     for (var i = 0; i < rows.length; i++) {
@@ -74,7 +78,7 @@ FROM category;`
 }
 
 // 14. 즐겨찾기
-exports.popularInsert = async function(req, res) {
+exports.popularInsert = async function (req, res) {
   const token = req.verifiedToken
   const json = req.body
   const boardId = req.params.boardId
@@ -86,7 +90,7 @@ VALUES(?, ?, ?);
 `
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [ rows ] = await connection.query(insertCommentQuery, [
+    const [rows] = await connection.query(insertCommentQuery, [
       json.categorytype,
       json.cafeName,
       selectUserInfoParams,
@@ -110,7 +114,7 @@ VALUES(?, ?, ?);
 }
 
 // 검색
-exports.search = async function(req, res) {
+exports.search = async function (req, res) {
   const json = req.body
 
   const connection = await pool.getConnection(async (conn) => conn)
@@ -122,7 +126,7 @@ exports.search = async function(req, res) {
             b.title LIKE '%${json.word}%' OR
             b.contents LIKE '%${json.word}%' OR
             u.name LIKE '%${json.word}%';`
-    const [ rows ] = await connection.query(SearchQuery)
+    const [rows] = await connection.query(SearchQuery)
     console.log(rows)
     const list = []
     if (rows.length === 0) list[0] = '검색 결과가 없습니다.'
@@ -153,7 +157,7 @@ exports.search = async function(req, res) {
 }
 
 // 북마크 내가 즐겨찾기한 게시판 조회
-exports.userPopular = async function(req, res) {
+exports.userPopular = async function (req, res) {
   const token = req.verifiedToken
   console.log(token)
   try {
@@ -166,7 +170,7 @@ exports.userPopular = async function(req, res) {
                     `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [ userInfoRows ] = await connection.query(selectUserPopularQuery, selectUserInfoParams)
+      const [userInfoRows] = await connection.query(selectUserPopularQuery, selectUserInfoParams)
       connection.release()
       res.json({
         userInfo: userInfoRows,

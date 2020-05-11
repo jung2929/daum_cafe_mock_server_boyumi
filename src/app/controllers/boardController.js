@@ -1,9 +1,5 @@
-const {
-  pool
-} = require('../../../config/database')
-const {
-  logger
-} = require('../../../config/winston')
+const { pool } = require('../../../config/database')
+const { logger } = require('../../../config/winston')
 
 const jwt = require('jsonwebtoken')
 const regexEmail = require('regex-email')
@@ -15,7 +11,7 @@ var FCM = require('fcm-node')
 var serviceAccount = require('../../../config/serviceAccountKey.json')
 
 // 게시글 리스트, 최신글 순서대로
-exports.boardList = async function (req, res) {
+exports.boardList = async function(req, res) {
   const connection = await pool.getConnection(async (conn) => conn)
   try {
     const ListBoardQuery = `SELECT b.idboard, b.title, b.categorytype, b.cafeName, b.createAt, u.id, b.img, b.views,
@@ -28,12 +24,12 @@ exports.boardList = async function (req, res) {
         else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
         END AS createdAt
         FROM board AS b JOIN user AS u
-        ON u.id = b.userId AND b.status != 'DELETED'
+        ON u.id = b.userId AND b.curstatus != 'DELETED'
         WHERE b.cafeName=?
         GROUP BY b.idboard
         ORDER BY b.createAt DESC;`
 
-    const [rows] = await connection.query(ListBoardQuery, [req.params.cafeName])
+    const [ rows ] = await connection.query(ListBoardQuery, [ req.params.cafeName ])
     connection.release()
     return res.json({
       isSuccess: true,
@@ -53,7 +49,7 @@ exports.boardList = async function (req, res) {
 }
 
 //  게시글 작성
-exports.boardPost = async function (req, res) {
+exports.boardPost = async function(req, res) {
   console.log('board Test')
   const token = req.verifiedToken
   const json = req.body
@@ -65,7 +61,7 @@ exports.boardPost = async function (req, res) {
         VALUES(?, ?, ?, ?, ?, ?);`
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [rows] = await connection.query(insertBoardQuery, [
+    const [ rows ] = await connection.query(insertBoardQuery, [
       json.title,
       json.contents,
       selectUserInfoParams,
@@ -78,7 +74,7 @@ exports.boardPost = async function (req, res) {
     // 즐겨찾기 한 사람 조회
     const searchPopular = `SELECT i.phone FROM phone_info AS i JOIN popular AS p
     ON i.userId = p.user_id WHERE p.categorytype=? AND p.cafeName=?;`
-    const [searchPopularRows] = await connection.query(searchPopular, [json.categorytype, json.cafeName])
+    const [ searchPopularRows ] = await connection.query(searchPopular, [ json.categorytype, json.cafeName ])
 
     console.log(searchPopularRows.length)
     for (var j = 0; j < searchPopularRows.length; j++) {
@@ -96,7 +92,7 @@ exports.boardPost = async function (req, res) {
         },
       }
 
-      fcm.send(push_data, function (error, response) {
+      fcm.send(push_data, function(error, response) {
         if (error) {
           console.error('Push메시지 발송에 실패했습니다.')
           console.error(error)
@@ -147,7 +143,7 @@ exports.boardPost = async function (req, res) {
 }
 
 //  게시글 수정
-exports.boardModify = async function (req, res) {
+exports.boardModify = async function(req, res) {
   const token = req.verifiedToken
   const json = req.body
   const boardId = req.params.boardId
@@ -159,7 +155,7 @@ exports.boardModify = async function (req, res) {
     const modifyBoardQuery = `SELECT userId FROM board WHERE idboard = ?;`
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [rows] = await connection.query(modifyBoardQuery, boardId)
+    const [ rows ] = await connection.query(modifyBoardQuery, boardId)
 
     console.log('rows test ' + rows[0].userId)
 
@@ -173,7 +169,7 @@ exports.boardModify = async function (req, res) {
     }
 
     const patchBoardQuery = `UPDATE board SET title=?, contents=?, img=? WHERE idboard=?;`
-    const [result] = await connection.query(patchBoardQuery, [json.title, json.contents, json.img, boardId])
+    const [ result ] = await connection.query(patchBoardQuery, [ json.title, json.contents, json.img, boardId ])
     connection.release()
 
     return res.json({
@@ -194,7 +190,7 @@ exports.boardModify = async function (req, res) {
 }
 
 // 게시글 삭제
-exports.deleteBoard = async function (req, res) {
+exports.deleteBoard = async function(req, res) {
   const token = req.verifiedToken
   const data = req.body
   console.log(token)
@@ -202,15 +198,12 @@ exports.deleteBoard = async function (req, res) {
     const connection = await pool.getConnection(async (conn) => conn)
     try {
       const selectBoardDeleteQuery = `UPDATE board 
-          SET status='DELETED' 
+          SET curstatus='DELETED' 
           WHERE idboard=? AND userId=?;
           `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [boardDeleteRows] = await connection.query(selectBoardDeleteQuery, [
-        req.params.boardId,
-        selectBoardDeleteQuery,
-      ])
+      const [ boardDeleteRows ] = await connection.query(selectBoardDeleteQuery, [ req.params.boardId, token.id ])
       connection.release()
       res.json({
         boardDeleteRows: boardDeleteRows,
@@ -231,7 +224,7 @@ exports.deleteBoard = async function (req, res) {
 }
 
 //  댓글 작성
-exports.commentPost = async function (req, res) {
+exports.commentPost = async function(req, res) {
   const token = req.verifiedToken
   const json = req.body
 
@@ -242,7 +235,7 @@ exports.commentPost = async function (req, res) {
         `
     console.log(token.id)
     const selectUserInfoParams = token.id
-    const [rows] = await connection.query(insertCommentQuery, [
+    const [ rows ] = await connection.query(insertCommentQuery, [
       json.contents,
       selectUserInfoParams,
       req.params.boardId,
@@ -266,7 +259,7 @@ exports.commentPost = async function (req, res) {
 }
 
 // 댓글 수정
-exports.commentModify = async function (req, res) {
+exports.commentModify = async function(req, res) {
   const token = req.verifiedToken
   const json = req.body
   const boardId = req.params.boardId
@@ -278,7 +271,7 @@ exports.commentModify = async function (req, res) {
     console.log(token.id)
     const selectUserInfoParams = token.id
     console.log('commentId : ' + commentId)
-    const [rows] = await connection.query(modifyCommentQuery, commentId)
+    const [ rows ] = await connection.query(modifyCommentQuery, commentId)
 
     console.log(rows[0])
     if (rows[0].userId != token.id) {
@@ -291,7 +284,7 @@ exports.commentModify = async function (req, res) {
     }
 
     const patchCommentQuery = `UPDATE comment SET content=? WHERE idcomment=?;`
-    const [result] = await connection.query(patchCommentQuery, [json.contents, commentId])
+    const [ result ] = await connection.query(patchCommentQuery, [ json.contents, commentId ])
     connection.release()
     console.log(result)
     return res.json({
@@ -312,7 +305,7 @@ exports.commentModify = async function (req, res) {
 }
 
 // 댓글삭제
-exports.deleteComment = async function (req, res) {
+exports.deleteComment = async function(req, res) {
   const token = req.verifiedToken
   const data = req.body
   console.log(token)
@@ -325,7 +318,7 @@ exports.deleteComment = async function (req, res) {
           `
       console.log(token.id)
       const selectUserInfoParams = token.id
-      const [commentDeleteRows] = await connection.query(selectCommentDeleteQuery, [req.params.commentId, token.id])
+      const [ commentDeleteRows ] = await connection.query(selectCommentDeleteQuery, [ req.params.commentId, token.id ])
       connection.release()
       res.json({
         commentDeleteRows: commentDeleteRows,
@@ -346,11 +339,11 @@ exports.deleteComment = async function (req, res) {
 }
 
 // 글 상세보기
-exports.boardDetail = async function (req, res) {
+exports.boardDetail = async function(req, res) {
   connection = await pool.getConnection(async (conn) => conn)
   try {
     const viewCountQuery = `UPDATE board SET views = views+1 WHERE idboard=?;`
-    const view = await connection.query(viewCountQuery, [req.params.boardId])
+    const view = await connection.query(viewCountQuery, [ req.params.boardId ])
 
     const BoardViewQuery = `SELECT b.title, b.contents, b.userId AS boardUser, b.img, c.content, c.createAt, c.userId AS commentUser, c.idcomment AS commentid,
         CASE
@@ -364,7 +357,7 @@ exports.boardDetail = async function (req, res) {
         LEFT JOIN comment AS c ON (c.status <> 'DELETED') AND b.idBoard = c.boardIdx
         WHERE b.idBoard=?;`
 
-    const [rows] = await connection.query(BoardViewQuery, [req.params.boardId])
+    const [ rows ] = await connection.query(BoardViewQuery, [ req.params.boardId ])
 
     // 댓글 여러개 띄어놓는거 예외처리할것!
 
@@ -387,7 +380,7 @@ exports.boardDetail = async function (req, res) {
 }
 
 // 내가 쓴 글 조회
-exports.myBoard = async function (req, res) {
+exports.myBoard = async function(req, res) {
   console.log(req.verifiedToken)
   const token = req.verifiedToken
   console.log('my board list test')
@@ -403,12 +396,12 @@ exports.myBoard = async function (req, res) {
           else CONCAT(TIMESTAMPDIFF(DAY, b.createAt, CURRENT_TIMESTAMP), ' 일 전')
           END AS createdAt
           FROM board AS b JOIN user AS u ON u.id = b.userId AND(u.status != 'DELETED'
-            AND b.status != 'DELETED')
+            AND b.curstatus != 'DELETED')
           WHERE u.id = ?
             ORDER BY b.createAt DESC;
           `
 
-    const [rows] = await connection.query(myBoardListQuery, token.id)
+    const [ rows ] = await connection.query(myBoardListQuery, token.id)
     console.log(rows)
     connection.release()
     return res.json({
@@ -433,7 +426,7 @@ exports.myBoard = async function (req, res) {
 }
 
 // 내가 댓글 쓴 글
-exports.myComment = async function (req, res) {
+exports.myComment = async function(req, res) {
   const token = req.verifiedToken
   const connection = await pool.getConnection(async (conn) => conn)
   try {
@@ -449,13 +442,13 @@ exports.myComment = async function (req, res) {
           FROM board AS b JOIN user AS u JOIN comment AS c
           ON u.id = c.userId AND c.boardIdx = b.idboard
           AND c.status != 'DELETED'
-          AND b.status != 'DELETED'
+          AND b.curstatus != 'DELETED'
           WHERE u.id = ?
             GROUP BY b.idboard
           ORDER BY b.createAt DESC limit 0, 5;
           `
 
-    const [rows] = await connection.query(myBoardListQuery, token.id)
+    const [ rows ] = await connection.query(myBoardListQuery, token.id)
     connection.release()
     return res.json({
       isSuccess: true,
